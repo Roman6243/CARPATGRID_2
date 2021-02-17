@@ -1,4 +1,3 @@
-import pandas
 import pandas as pd
 import seaborn as sns
 import numpy as np
@@ -36,7 +35,7 @@ alt["index"] = alt["index"].astype(str)
 # to write data in different year batch
 years = [[1961, 1970], [1971, 1980], [1981, 1990], [1991, 2000], [2001, 2010]]
 y_frames = pd.DataFrame(years, columns=['start', 'end'])
-for i in range(1,5):
+for i in range(0,5):
     start = y_frames['start'][i]
     end = y_frames['end'][i]
 
@@ -53,6 +52,8 @@ for i in range(1,5):
     ws10m = ws10m.merge(alt, how='left', on=['index'])
     ws10m.loc[ws10m['altitude'] >= 1200, 'ws12'] = ws10m['ws12']*1.7
     ws10m.loc[ws10m['altitude'] < 1200, 'ws12'] = ws10m['ws12']*1.4
+    ws10m.loc[ws10m['ws12'] < 0.5, 'ws12'] = 0.5
+    ws10m.loc[ws10m['ws12'] > 27, 'ws12'] = 27
 
     rh = extract_d('CARPATGRID_RH\\CARPATGRID_RH_D.ser', "CARPATGRID_RH\\CARPATGRID_RH_D.csv", param = 'rh12')
     rh['rh12'] = rh['rh12'] * 0.86
@@ -73,12 +74,13 @@ for i in range(1,5):
     df = df.round({'utci': 4, 't12': 4, 'mrt': 4, 'ws12': 4, 'rh12': 4, 'rg12': 4, 'lon': 1, 'lat': 1})
     # save calculated df on hdd
     df.to_pickle('results/df_' + str(start) + '_' + str(end) +'.pkl')
+    print("\n***********************************************************************************************************************************************\n")
 
-utci_1961_1970 = pd.read_pickle('results/df1961_1970.pkl')
-utci_1971_1980 = pd.read_pickle('results/df1971_1980.pkl')
-utci_1981_1990 = pd.read_pickle('results/df1981_1990.pkl')
-utci_1991_2000 = pd.read_pickle('results/df1991_2000.pkl')
-utci_2001_2010 = pd.read_pickle('results/df2001_2010.pkl')
+utci_1961_1970 = pd.read_pickle('results/df_1961_1970.pkl')
+utci_1971_1980 = pd.read_pickle('results/df_1971_1980.pkl')
+utci_1981_1990 = pd.read_pickle('results/df_1981_1990.pkl')
+utci_1991_2000 = pd.read_pickle('results/df_1991_2000.pkl')
+utci_2001_2010 = pd.read_pickle('results/df_2001_2010.pkl')
 
 utci_list = [utci_1961_1970, utci_1971_1980, utci_1981_1990, utci_1991_2000, utci_2001_2010]
 utci = pd.concat(utci_list)
@@ -87,7 +89,7 @@ months = [['January', 1], ['February', 2], ['March', 3], ['April', 4], ['May', 5
           ['July', 7], ['August', 8], ['September', 9], ['October', 10], ['November', 11], ['December', 12]]
 months = pd.DataFrame(months, columns=['month', 'order'])
 
-# to know the min and max across all months
+# to know the min and max UTCI across all months
 data = pd.DataFrame()
 for month in months['order'].unique():
     temp = utci[utci['month'] == month].groupby(['lon', 'lat'])['utci'].mean().reset_index()
@@ -159,17 +161,6 @@ pvalue_df = pvalue_df.merge(alt, on=['index']).assign(month = 1)
 plot_hm(df=pvalue_df, value='pvalue', vmax=None, vmin=None, month=1)
 plot_hm(df=pvalue_df, value='slope', vmax=None, vmin=None, month=1)
 
-temp.to_excel("utci_jan.xlsx")
-
-# fg, ax = plt.subplots(figsize = (21, 11), dpi = 100)
-# ax.plot(m_mean_year_monthly['year'], m_mean_year_monthly['utci'], color='c', marker='o')
-# ax.set_xlabel('Time [Year]')
-# ax.set_ylabel('Mean UTCI')
-# ax.set_facecolor('#cccccc')
-# ax.grid(True, linestyle = ':', alpha=0.8)
-# ax.set_xticks(np.arange(1960, 2014, 4))
-# plt.show()
-
 
 fg, ax = plt.subplots(4, 1, sharey = True, sharex = True, figsize=(21, 11), dpi=100)
 season=0
@@ -194,3 +185,23 @@ for month in range(10,13):
 ax[season].legend(loc='center', bbox_to_anchor=(0.5, -0.25), shadow=False, ncol=3)
 
 plt.show()
+
+# fg, ax = plt.subplots(figsize = (21, 11), dpi = 100)
+# ax.plot(m_mean_year_monthly['year'], m_mean_year_monthly['utci'], color='c', marker='o')
+# ax.set_xlabel('Time [Year]')
+# ax.set_ylabel('Mean UTCI')
+# ax.set_facecolor('#cccccc')
+# ax.grid(True, linestyle = ':', alpha=0.8)
+# ax.set_xticks(np.arange(1960, 2014, 4))
+# plt.show()
+
+
+utci_ranges_n = [min, -40, -27, -13, 0, 9, 26, 32, 38, 46, max]
+utci_ranges_v = ['EC', 'VSC', 'SC', 'MC', 'SLC', 'NT', 'MH', 'SH', 'VSH', 'EH']
+
+for i in range(0, len(utci_ranges_n)-1):
+    print("Define the category "+utci_ranges_v[i] )
+    utci.loc[(utci['utci'] > utci_ranges_n[i]) & (utci['utci'] <= utci_ranges_n[i+1]), 'category'] = utci_ranges_v[i]
+
+cat_days = utci.groupby(['category']).count()['year'].reset_index().rename(columns = {'year':'n_days'})
+cat_days.sort_values(by = "n_days", ascending=False, ignore_index=True, inplace=True)
