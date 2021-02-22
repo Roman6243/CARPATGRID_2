@@ -5,19 +5,29 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from scipy.stats import ttest_1samp
 from functions import *
+import csv
+
+exec(open("functions.py").read())
 
 # turn off the ineractive mode for pop up plot windows
 plt.ioff()
 plt.isinteractive()
 
 os.chdir('C:\\Users\\mukho\\Downloads\\CARPATGRID')
-print(os.getcwd())
+print(" ".join(['Current path is', os.getcwd()]))
 pd.set_option('display.max_columns', 300)
 pd.set_option('display.width', 1000)
 
+MONTHS = [['January', 1], ['February', 2], ['March', 3], ['April', 4], ['May', 5], ['June', 6],
+          ['July', 7], ['August', 8], ['September', 9], ['October', 10], ['November', 11], ['December', 12]]
+MONTHS = pd.DataFrame(MONTHS, columns=['month', 'order'])
+
+YEARS = [[1961, 1970], [1971, 1980], [1981, 1990], [1991, 2000], [2001, 2010]]
+Y_FRAMES = pd.DataFrame(YEARS, columns=['start', 'end'])
+
 # extract altitude
-f_in = 'PredtandfilaGrid.dat'
-f_out = 'altitude_grid.csv'
+f_in = 'INPUT\\PredtandfilaGrid.dat'
+f_out = 'INPUT\\altitude_grid.csv'
 if os.path.isfile(f_out):
     print('File ' + f_out + ' exist')
 else:
@@ -27,17 +37,15 @@ else:
 alt = pd.read_csv(f_out, delimiter=';')
 alt["index"] = alt["index"].astype(str)
 
-print("Would you like to recalculate parameters: 1)RG; 2)MRT; 3)WS10m; 4)RH; 5)TMax; ?\n")
-print("YES - y, NO - n")
+print("\nWould you like to recalculate parameters: 1)RG; 2)MRT; 3)WS10m; 4)RH; 5)TMax ?\n")
+print("y/n ?")
 answer = input()
 
 if answer == 'y':
     # to write data in different year batch
-    years = [[1961, 1970], [1971, 1980], [1981, 1990], [1991, 2000], [2001, 2010]]
-    y_frames = pd.DataFrame(years, columns=['start', 'end'])
-    for i in range(0,5):
-        start = y_frames['start'][i]
-        end = y_frames['end'][i]
+    for i in range(5):
+        start = Y_FRAMES['start'][i]
+        end = Y_FRAMES['end'][i]
 
         rg = extract_d(f_input = "CARPATGRID_RG\\CARPATGRID_RG_D.ser", f_output = "CARPATGRID_RG\\CARPATGRID_RG_D.csv", param = 'rg12')
         rg = rg.merge(alt, how='left', on=['index'])
@@ -76,25 +84,25 @@ if answer == 'y':
         df.to_pickle('results/df_' + str(start) + '_' + str(end) +'.pkl')
         print("\n***********************************************************************************************************************************************\n")
 else:
-    print("Skip this step")
+    print("Skip this step of recalculation 1)RG; 2)MRT; 3)WS10m; 4)RH; 5)TMax")
 
-utci_1961_1970 = pd.read_pickle('results/df_1961_1970.pkl')
-utci_1971_1980 = pd.read_pickle('results/df_1971_1980.pkl')
-utci_1981_1990 = pd.read_pickle('results/df_1981_1990.pkl')
-utci_1991_2000 = pd.read_pickle('results/df_1991_2000.pkl')
-utci_2001_2010 = pd.read_pickle('results/df_2001_2010.pkl')
+# utci_1961_1970 = pd.read_pickle('results/df_1961_1970.pkl')
+# utci_1971_1980 = pd.read_pickle('results/df_1971_1980.pkl')
+# utci_1981_1990 = pd.read_pickle('results/df_1981_1990.pkl')
+# utci_1991_2000 = pd.read_pickle('results/df_1991_2000.pkl')
+# utci_2001_2010 = pd.read_pickle('results/df_2001_2010.pkl')
+# 
+# utci_list = [utci_1961_1970, utci_1971_1980, utci_1981_1990, utci_1991_2000, utci_2001_2010]
+# utci = pd.concat(utci_list)
+# utci.to_pickle('results/df_' + str(1961) + '_' + str(2010) +'.pkl')
 
-utci_list = [utci_1961_1970, utci_1971_1980, utci_1981_1990, utci_1991_2000, utci_2001_2010]
-utci = pd.concat(utci_list)
+utci = pd.read_pickle('results/df_1961_2010.pkl')
 print("UTCI data read from pickle files successfully!")
 
-months = [['January', 1], ['February', 2], ['March', 3], ['April', 4], ['May', 5], ['June', 6],
-          ['July', 7], ['August', 8], ['September', 9], ['October', 10], ['November', 11], ['December', 12]]
-months = pd.DataFrame(months, columns=['month', 'order'])
 
-# to know the min and max UTCI across all months
+# to know the min and max UTCI across all MONTHS
 data = pd.DataFrame()
-for month in months['order'].unique():
+for month in MONTHS['order'].unique():
     temp = utci[utci['month'] == month].groupby(['lon', 'lat'])['utci'].mean().reset_index()
     temp = temp.assign(month = month)
     data = pd.concat([data, temp])
@@ -103,8 +111,8 @@ min = data['utci'].min()
 max = data['utci'].max()
 
 # to save maps on hdd
-for month in months['order'].unique():
-    plot_hm(df=data, value='utci', vmax=max, vmin=min, month=month)
+for month in MONTHS['order'].unique():
+    plot_hm_utci(df=data, value='utci', vmax=max, vmin=min, month=month)
 
 # there is no difference between average monthly and daily except February -> different number of days
 m_mean_daily = utci.groupby(['month'])['utci'].mean().reset_index()
@@ -116,10 +124,10 @@ print(m_d_comp)
 # average daily temperature per year and calculate the trend (slope) of utci during 1961 - 2010 per each index
 utci_slope = utci[['year', 'month', 'index', 'utci']]
 
-print('Would you like to calculate slope (trend) per each month during whole time frame 1991-2010?')
+print('\nWould you like to calculate slope (trend) per each month during whole time frame 1991-2010?\n')
 answer = input()
 if answer == 'y':
-    # for month_n in months['order'].unique():
+    # for month_n in MONTHS['order'].unique():
     for month_n in [2,3,4]:
         slope_df = pd.DataFrame()
         for index in utci_slope['index'].unique():
@@ -134,50 +142,19 @@ if answer == 'y':
             temp = [[index, month_n, slope]]
             temp = pd.DataFrame(temp, columns=['index', 'month', 'slope'])
             slope_df = pd.concat([slope_df, temp])
-            m_name = months[months['order'] == month_n]['month'].tolist()[0]
+            m_name = MONTHS[MONTHS['order'] == month_n]['month'].tolist()[0]
             print("calculate data for index - " + str(index))
-        slope_df.to_pickle('results/slope_df_month_' + str(m_name) + '.pkl')
+        slope_df.to_pickle('results/utci_slope_df_month_' + str(m_name) + '.pkl')
 else:
-    print("Skip this step")
+    print("Skip step of recalculation slope of UTCI per time frame 1961-2010\n")
 
 # read the slope data and calculate the p-value
-utci_slope = pd.read_pickle('results/slope_df_month_January.pkl')
-utci_slope['index'] = utci_slope['index'].astype(int)
-utci_slope.reset_index(drop=True, inplace=True)
-
-# Density Plot and Histogram of all arrival delays
-sns.distplot(utci_slope['slope'], hist=True, kde=True,
-             bins=200, color = 'darkblue',
-             hist_kws={'edgecolor':'black'},
-             kde_kws={'linewidth': 2})
-plt.show()
-plt.close()
-
-# calculate the p-value
-# the null-hypothesis is: slope_per_month is the mean value in our dataset
-# if p-value < 0.05 then we reject the null-hypothesis
-# since this p-value is less than our significance level alpha = 0.05, we reject the null hypothesis; we have sufficient evidence to say that the mean value of slope is not equal to proposed one
-# the p-value of our test is greater than alpha = 0.05, we fail to reject the null hypothesis of the test; we do not have sufficient evidence to say that the mean value of slope is different from proposed one
-pvalue_df = pd.DataFrame()
-for index in utci_slope["index"].unique():
-    slope_per_month = utci_slope[utci_slope['index'] == index]['slope']
-    tset, pval = ttest_1samp(utci_slope['slope'], slope_per_month.tolist()[0])
-    if pval < 0.05:
-       print(" we are rejecting null hypothesis")
-    else:
-      print("we are accepting null hypothesis")
-    temp = [[index, pval, slope_per_month.tolist()[0]]]
-    temp = pd.DataFrame(temp, columns=['index', 'pvalue', 'slope'])
-    pvalue_df = pd.concat([pvalue_df, temp])
-slope_df_mean = pvalue_df['slope'].mean()
-pvalue_df = pvalue_df.assign(slope_avg = slope_df_mean)
-pvalue_df.loc[pvalue_df['pvalue'] > 0.05, 'significante'] = "insignificance"
-pvalue_df.loc[pvalue_df['pvalue'] <= 0.05, 'significante'] = "significance"
-
-alt['index'] = alt['index'].astype(int)
-pvalue_df = pvalue_df.merge(alt, on=['index']).assign(month = 1)
-plot_hm(df=pvalue_df, value='pvalue', vmax=None, vmin=None, month=1)
-plot_hm(df=pvalue_df, value='slope', vmax=None, vmin=None, month=1)
+for m_number in [1,2,3]:
+    utci_slope = pd.read_pickle('results/utci_slope_df_month_'+MONTHS[MONTHS['order']==m_number]['month'].tolist()[0]+'.pkl')
+    utci_slope.reset_index(drop=True, inplace=True)
+    pvalue_df = calculate_pvalue(df=utci_slope, var=str(m_number))
+    plot_hm_utci(df=pvalue_df, value='pvalue', vmax=None, vmin=None, variable=m_number)
+    plot_hm_utci(df=pvalue_df, value='slope', vmax=None, vmin=None, variable=m_number)
 
 # *********************************** CATEGORY CALCULATION ***********************************
 # calculate the number of days per each utci category
@@ -187,30 +164,51 @@ for i in range(0, len(utci_ranges_n)-1):
     print("Define the category "+utci_ranges_v[i] )
     utci.loc[(utci['utci'] > utci_ranges_n[i]) & (utci['utci'] <= utci_ranges_n[i+1]), 'category'] = utci_ranges_v[i]
 
-start = 1961
-end = 1970
-index = '1'
+print('\nWould you like to calculate slope (trend) per decade during 1991-2010?\n')
+answer = input()
+if answer == 'y':
+    for i in range(1,5):
+        df = utci[(utci['year']>=Y_FRAMES['start']) & (utci['year'] <= Y_FRAMES['end'])]
+        slope_days = pd.DataFrame()
+        for index in df['index'].unique():
+            df_dec_index = df[df['index'] == index].groupby(['year', 'category'])['utci'].\
+                count().reset_index().rename(columns={'utci':'n_days'})
+            temp_inter = pd.DataFrame()
 
-df = utci[(utci['year']>=start) & (utci['year'] <= end)]
-slope_days = pd.DataFrame()
-for index in df['index'].unique():
-# for index in ['1', '2', '3']:
-    df_dec_index = df[df['index'] == index].groupby(['year', 'category'])['utci'].\
-        count().reset_index().rename(columns={'utci':'n_days'})
-    temp_inter = pd.DataFrame()
+            for cat in df_dec_index['category'].unique():
+                df_annual_slope_dec = df_dec_index[df_dec_index['category'] == cat]
 
-    for cat in df_dec_index['category'].unique():
-        df_annual_slope_dec = df_dec_index[df_dec_index['category'] == cat]
+                x = df_annual_slope_dec['year'].to_numpy().reshape((-1,1))
+                y = df_annual_slope_dec['n_days'].to_numpy()
+                model = LinearRegression(fit_intercept=True)
+                model.fit(x, y)
+                slope = round(model.coef_[0], 5)
 
-        x = df_annual_slope_dec['year'].to_numpy().reshape((-1,1))
-        y = df_annual_slope_dec['n_days'].to_numpy()
-        model = LinearRegression(fit_intercept=True)
-        model.fit(x, y)
-        slope = round(model.coef_[0], 5)
+                temp = [[index, str(start)+"::" + str(end), slope, cat]]
+                temp = pd.DataFrame(temp, columns=['index', 'decade', 'slope', 'category'])
+                temp_inter = pd.concat([temp_inter, temp])
 
-        temp = [[index, str(start)+"::" + str(end), slope, cat]]
-        temp = pd.DataFrame(temp, columns=['index', 'decade', 'slope', 'category'])
-        temp_inter = pd.concat([temp_inter, temp])
+            slope_days = pd.concat([slope_days, temp_inter])
+            print("calculate data for index - " + str(index))
+        slope_days.to_pickle("results/days_slope_df_"+str(Y_FRAMES['start'])+".pkl")
 
-    slope_days = pd.concat([slope_days, temp_inter])
-    print("calculate data for index - " + str(index))
+
+days_slope = pd.read_pickle("results/days_slope_df.pkl")
+for cat in days_slope['category'].unique():
+    df_cat = days_slope[days_slope['category'] == cat]
+    df_cat = calculate_pvalue(df=df_cat, var=cat)
+    plot_hm_days(df=df_cat, value='pvalue', vmin=None, vmax=None, var=cat)
+    plot_hm_days(df=df_cat, value='slope', vmin=None, vmax=None, var=cat)
+
+# ************************************************************************************************************************
+# Density Plot and Histogram of all arrival delays
+# sns.distplot(utci_slope['slope'], hist=True, kde=True,
+#              bins=200, color = 'darkblue',
+#              hist_kws={'edgecolor':'black'},
+#              kde_kws={'linewidth': 2})
+# plt.show()
+# plt.close()
+#
+# sns.boxplot(x=utci_slope['slope'])
+# plt.show()
+# plt.close()
