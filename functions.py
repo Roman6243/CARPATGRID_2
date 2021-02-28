@@ -47,31 +47,6 @@ def extract_data(f_input, f_output, param):
     print("****************************")
     return df
 
-def calculate_pvalue(df, var):
-    """
-        calculate the p-value
-        the null-hypothesis is: slope_per_month is the mean value in our dataset
-        if p-value < 0.05 then we reject the null-hypothesis
-        since this p-value is less than our significance level alpha = 0.05, we reject the null hypothesis,
-        we have sufficient evidence to say that the mean value of slope is not equal to proposed one.
-        the p-value of our test is greater than alpha = 0.05, we fail to reject the null hypothesis of the test,
-        we do not have sufficient evidence to say that the mean value of slope is different from proposed one.
-    """
-    pvalue_df = pd.DataFrame()
-    for index in df["index"].unique():
-        slope_per_index = df[df['index'] == index]['slope'].tolist()[0]
-        tset, pval = ttest_1samp(df['slope'], slope_per_index)
-        temp = [[index, pval, slope_per_index]]
-        temp = pd.DataFrame(temp, columns=['index', 'pvalue', 'slope'])
-        pvalue_df = pd.concat([pvalue_df, temp])
-    slope_df_mean = pvalue_df['slope'].mean()
-    pvalue_df = pvalue_df.assign(slope_avg = slope_df_mean)
-    pvalue_df.loc[pvalue_df['pvalue'] > 0.05, 'significance'] = "insignificance"
-    pvalue_df.loc[pvalue_df['pvalue'] <= 0.05, 'significance'] = "significance"
-    pvalue_df = pvalue_df.merge(alt, on=['index']).assign(variable = var)
-    print("\nPvalue calculated successfully for category "+var+"\n")
-    return pvalue_df
-
 def read_altitude():
     """
     extract altitude
@@ -88,3 +63,16 @@ def read_altitude():
     alt = pd.read_csv(f_out, delimiter=';')
     alt["index"] = alt["index"].astype(str)
     return alt
+
+"""
+Prob(F-Statistic): This tells the overall significance of the regression. This is to assess the significance level of 
+all the variables together unlike the t-statistic that measures it for individual variables. 
+
+The null hypothesis under this is “all the regression coefficients are equal to zero”. 
+Prob(F-statistics) depicts the probability of null hypothesis being true. 
+
+If your p-value is 0.1921 (greater than 0.05) means that there is no statistically significant evidence to reject the null hypothesis. 
+Thus, there is no evidence of a relationship (of the kind posited in your model) between the set of explanatory variables and your response variable.
+
+If your p-value is less than 0.05 we reject the null hypothesis, and can say that regression parameters are dependent.
+"""

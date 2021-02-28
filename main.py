@@ -1,9 +1,11 @@
 import pandas as pd
 import seaborn as sns
+import numpy as np
 import os
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from scipy.stats import ttest_1samp
+import statsmodels.api as sm
 from functions import *
 import csv
 
@@ -85,17 +87,13 @@ def calc_utci(alt):
 
     utci_list = [utci_1961_1970, utci_1971_1980, utci_1981_1990, utci_1991_2000, utci_2001_2010]
     utci = pd.concat(utci_list)
-    utci.to_pickle('results/df_' + str(1961) + '_' + str(2010) +'.pkl')
-
-def read_utci():
-    """
-    read and calculate the number of days per each utci category
-    :return:
-    """
-    utci = pd.read_pickle('results/df_1961_2010.pkl')
     for i in range(0, len(UTCI_RANGES_N)-1):
         print("Define the category "+UTCI_RANGES_V[i] )
         utci.loc[(utci['utci'] > UTCI_RANGES_N[i]) & (utci['utci'] <= UTCI_RANGES_N[i+1]), 'category'] = UTCI_RANGES_V[i]
+    utci.to_pickle('results/df_1961_2010.pkl')
+
+def read_utci():
+    utci = pd.read_pickle('results/df_1961_2010.pkl')
     print("UTCI data read from pickle files successfully!\n")
     return utci
 
@@ -115,42 +113,47 @@ def save_utci_map(utci):
         data_m = data[data['month'] == month]
         plot_hm_utci(df=data_m, value='utci', vmax=max, vmin=min, variable=month)
 
+
 def calc_slope_utci(utci):
     """
     average daily temperature per year and calculate the trend (slope) of utci during 1961 - 2010 per each index
     """
     # for month_n in MONTHS['order'].unique():
-    # for that moment calculate only for three months
-    for month_n in [1,2,3]:
-        slope_df = pd.DataFrame()
+    for month_n in [10,11,12]:
+        # slope_df = pd.DataFrame()
+        slope_df = []
         df_month = utci[utci['month'] == month_n]
         for index in utci['index'].unique():
             m_mean_year_monthly = df_month[df_month['index'] == index].groupby(['year'])['utci'].mean().reset_index()
             x = m_mean_year_monthly['year'].to_numpy().reshape((-1,1))
             y = m_mean_year_monthly['utci'].to_numpy()
-            model = LinearRegression(fit_intercept=True)
-            model.fit(x, y)
-            slope = round(model.coef_[0], 5)
-            print('slope:', slope)
 
-            temp = [[index, month_n, slope]]
-            temp = pd.DataFrame(temp, columns=['index', 'month', 'slope'])
-            slope_df = pd.concat([slope_df, temp])
+            x = sm.add_constant(x)
+            model = sm.OLS(y, x)
+            results = model.fit()
+            slope, f_pvalue, rsquared = results.params[1], results.f_pvalue, results.rsquared
+            temp = [index, month_n, slope, f_pvalue, rsquared]
+
+            slope_df.append(temp)
             m_name = MONTHS[MONTHS['order'] == month_n]['month'].tolist()[0]
-            print("calculate data for index - " + str(index))
-        slope_df.to_pickle('results/utci_slope_df_month_' + str(m_name) + '.pkl')
+            print( ' '.join(["calculate slope, f_pvalue, rsquared for month -", m_name, "and index -", index]))
+        slope_df = pd.DataFrame(slope_df, columns=['index', 'month', 'slope', 'f_pvalue', 'rsquared'])
+        slope_df.to_pickle('results/utci_slope_df_month_' + m_name + '.pkl')
 
-def read_slope_utci():
+def save_slope_utci_map():
     """
     read the slope data and calculate the p-value
     """
     # for that moment calculate only for three months
-    for m_number in [1,2,3]:
-        utci_slope = pd.read_pickle('results/utci_slope_df_month_'+MONTHS[MONTHS['order']==m_number]['month'].tolist()[0]+'.pkl')
+    for m_number in MONTHS['order'].unique():
+    # for m_number in [1,2,3]:
+        m_name = MONTHS[MONTHS['order']==m_number]['month'].tolist()[0]
+        utci_slope = pd.read_pickle('results/utci_slope_df_month_'+m_name+'.pkl')
         utci_slope.reset_index(drop=True, inplace=True)
-        pvalue_df = calculate_pvalue(df=utci_slope, var=str(m_number))
-        plot_hm_utci(df=pvalue_df, value='pvalue', vmax=None, vmin=None, variable=m_number)
-        plot_hm_utci(df=pvalue_df, value='slope', vmax=None, vmin=None, variable=m_number)
+        utci_slope = utci_slope.merge(alt, on=['index'], how='inner')
+        utci_slope.to_excel('maps/slope_utci_'+m_name+'.xlsx')
+        plot_hm_utci(df=utci_slope, value='f_pvalue', vmax=None, vmin=None, variable=m_number)
+        plot_hm_utci(df=utci_slope, value='slope', vmax=None, vmin=None, variable=m_number)
 
 # *********************************** CATEGORY CALCULATION ***********************************
 # ********************************************************************************************
@@ -161,43 +164,39 @@ def calc_slope_days_cat(utci):
     """
     to calculate slope (trend) of days number category during 1961-2010
     """
-    slope_days = pd.DataFrame()
     # for cat in utci['category'].unique():
-    # for that moment calculate only for current category
-    for cat in ['SC', 'VSH', 'VSC', 'EC', 'EH']:
+    # 'SH', 'SC', 'VSH', 'VSC', 'EC', 'EH'
+    for cat in ['SH', 'SC', 'VSH', 'VSC', 'EC', 'EH']:
+        slope_cat = []
         df_cat = utci[utci['category'] == cat]
-        temp_cat = pd.DataFrame()
-        for index in sorted(df_cat['index'].unique()):
+        for index in df_cat['index'].unique():
             df_cat_index = df_cat[df_cat['index'] == index].groupby(['year', 'category'])['utci']. \
                 count().reset_index().rename(columns={'utci': 'n_days'})
 
-            x = df_cat_index['year'].to_numpy().reshape((-1,1))
-            y = df_cat_index['n_days'].to_numpy()
-            model = LinearRegression(fit_intercept=True)
-            model.fit(x, y)
-            slope = round(model.coef_[0], 5)
+            # there are indices with one category value, for ex. index = '928'
+            if df_cat_index.shape[0] > 1:
+                x = df_cat_index['year'].to_numpy().reshape((-1,1))
+                y = df_cat_index['n_days'].to_numpy()
+                x = sm.add_constant(x)
+                model = sm.OLS(y, x)
+                results = model.fit()
+                slope, f_pvalue, rsquared = results.params[1], results.f_pvalue, results.rsquared
 
-            temp = [[index, slope, cat]]
-            temp = pd.DataFrame(temp, columns=['index', 'slope', 'category'])
-            temp_cat = pd.concat([temp_cat, temp])
-            print(" ".join(["calculate data for category -", cat, "and for index", index]))
-        slope_days = pd.concat([slope_days, temp_cat])
-        slope_days.to_pickle("results/days_slope_df_1961_2010_"+cat+".pkl")
+                temp = [index, slope, f_pvalue, rsquared, cat]
+            else:
+                temp = [index, 0, 0,0, cat]
 
-def read_slope_days_cat(utci):
-    days_slope = pd.DataFrame()
+            slope_cat.append(temp)
+            print(" ".join(["calculate slope, f_pvalue, rsquared for category -", cat, "and for index -", index]))
+        slope_cat = pd.DataFrame(slope_cat, columns=['index', 'slope', 'f_pvalue', 'rsquared', 'category'])
+        slope_cat.to_pickle("results/days_slope_df_1961_2010_"+cat+".pkl")
+
+def save_slope_map(utci):
     for cat in utci['category'].unique():
-        temp = pd.read_pickle("results/days_slope_df_1961_2010_"+cat+".pkl")
-        days_slope = pd.concat([days_slope, temp])
-    return days_slope
-
-def save_slope_pvalue_map(days_slope):
-    for cat in days_slope['category'].unique():
-        df_cat = days_slope[days_slope['category'] == cat]
-        df_cat = calculate_pvalue(df=df_cat, var=cat)
-        df_cat = df_cat.merge(alt[['lon', 'lat']], on=['lon', 'lat'], how='right')
-        df_cat.to_excel("maps/n_days_slope/" + cat + '_n_days_slope.xlsx')
-        plot_hm_cat(df=df_cat, value='pvalue', vmin=None, vmax=None, variable=cat)
+        df_cat = pd.read_pickle("results/days_slope_df_1961_2010_" + cat + ".pkl")
+        df_cat = df_cat.merge(alt, on=['index'], how='right')
+        df_cat.to_excel("maps/n_days_slope_v02/" + cat + '_n_days_slope.xlsx')
+        plot_hm_cat(df=df_cat, value='f_pvalue', vmin=None, vmax=None, variable=cat)
         plot_hm_cat(df=df_cat, value='slope', vmin=None, vmax=None, variable=cat)
 
 # ********************************************************************************************
@@ -214,10 +213,17 @@ def save_days_cat_map(utci):
         plot_hm_cat(df=df_cat, value='n_days', vmin=None, vmax=None, variable=cat)
 
 def main():
+    # calc_utci(alt)
     utci = read_utci()
-    save_days_cat_map(utci)
-    # days_slope = read_slope_days_cat(utci)
-    # save_slope_pvalue_map(days_slope)
+    # save_utci_map(utci)
+
+    # calc_slope_utci(utci)
+    # save_slope_utci_map()
+    #
+    # calc_slope_days_cat(utci)
+    save_slope_map(utci)
+
+    # save_days_cat_map(utci)
 
 if __name__ == "__main__":
     main()
