@@ -1,13 +1,8 @@
 import pandas as pd
-import seaborn as sns
-import numpy as np
 import os
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
-from scipy.stats import ttest_1samp
 import statsmodels.api as sm
-from functions import *
-import csv
+# from functions import *
 
 exec(open("functions.py").read())
 
