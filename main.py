@@ -34,6 +34,7 @@ def calc_utci(alt):
 
     # to write data in different year batch
     for i in range(5):
+        global start, end
         start = Y_FRAMES['start'][i]
         end = Y_FRAMES['end'][i]
 
