@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
-# from functions import *
+from functions import *
 
 exec(open("functions.py").read())
 
